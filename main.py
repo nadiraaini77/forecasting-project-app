@@ -117,6 +117,13 @@ def index():
     with open("static/index.html", encoding="utf-8") as f:
         return f.read()
 
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy",
+        "service": "JISDOR Forecast API",
+        "model_loaded": "model" in state,
+    }
 
 @app.get("/api/summary", response_model=Summary)
 def get_summary():
