@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Forecast Kurs JISDOR</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <h1>💱 Forecast Kurs JISDOR (USD/IDR)</h1>
+    <p class="caption">
+      Forecasting kurs referensi transaksi valas USD/IDR berdasarkan data
+      historis JISDOR — Bank Indonesia. (FastAPI backend)
+    </p>
+
+    <div class="grid" id="summary-grid"></div>
+
+    <div class="layout">
+      <div>
+        <div class="card">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <h3 style="margin: 0">📈 Data Historis & Forecast</h3>
+
+            <div style="display: flex; align-items: center; gap: 10px">
+              <label
+                >Horizon:
+                <select id="horizon-select">
+                  <option value="7">7 hari</option>
+                  <option value="14">14 hari</option>
+                  <option value="30" selected>30 hari</option>
+                </select>
+              </label>
+
+              <button id="download-btn">⬇ Download CSV</button>
+            </div>
+          </div>
+
+          <canvas id="chart" height="110"></canvas>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top: 0">📋 Nilai Prediksi</h3>
+          <table id="forecast-table">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Forecast (IDR)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top: 0">📊 Evaluasi Model</h3>
+          <table id="eval-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>MAE</th>
+                <th>RMSE</th>
+                <th>MAPE</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p id="eval-note" style="color: #8b949e; font-size: 0.85rem"></p>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="card">
+          <h3 style="margin-top: 0">📎 Sumber Data</h3>
+          <p>
+            Bank Indonesia — JISDOR<br />(Jakarta Interbank Spot Dollar Rate)
+          </p>
+          <p>
+            <a id="source-link" href="#" target="_blank">Lihat data resmi →</a>
+          </p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top: 0">🤖 Model Digunakan</h3>
+          <p><span class="badge" id="model-name"></span></p>
+          <p id="model-params"></p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const idFmt = (x) => Math.round(x).toLocaleString("id-ID");
+
+      let chart;
+      let currentForecast = [];
+
+      async function loadSummary() {
+        const res = await fetch("/api/summary");
+        const d = await res.json();
+
+        document.getElementById("summary-grid").innerHTML = `
+    <div class="metric"><div class="label">Kurs Terakhir</div><div class="value">Rp ${idFmt(d.last_value)}</div></div>
+    <div class="metric"><div class="label">Tanggal Terakhir</div><div class="value">${d.end_date}</div></div>
+    <div class="metric"><div class="label">Total Data</div><div class="value">${idFmt(d.records)} hari kerja</div></div>
+    <div class="metric"><div class="label">Model Terpakai</div><div class="value">${d.model_name}</div></div>
+  `;
+        document.getElementById("source-link").href = d.data_source_url;
+        document.getElementById("model-name").textContent = d.model_name;
+        document.getElementById("model-params").innerHTML = `
+    Seasonality mode: <code>${d.model_params.seasonality_mode}</code><br>
+    Prior scale: <code>${d.model_params.seasonality_prior_scale}</code><br>
+    Yearly seasonality: <code>${d.model_params.yearly_seasonality}</code><br>
+    Frekuensi: ${d.model_params.frequency}
+  `;
+        return d;
+      }
+
+      async function loadEvaluation(summary) {
+        const res = await fetch("/api/evaluation");
+        const rows = await res.json();
+        const tbody = document.querySelector("#eval-table tbody");
+        tbody.innerHTML = rows
+          .map(
+            (r) => `
+    <tr class="${r.model === summary.best_model ? "best" : ""}">
+      <td>${r.model}</td><td>${idFmt(r.mae)}</td><td>${idFmt(r.rmse)}</td><td>${r.mape.toFixed(2)}%</td>
+    </tr>
+  `,
+          )
+          .join("");
+
+        const note = document.getElementById("eval-note");
+        note.textContent = summary.is_deployed_best
+          ? `${summary.model_name} adalah model dengan performa terbaik (RMSE terendah) dan digunakan untuk forecasting.`
+          : `Model dengan RMSE terendah adalah ${summary.best_model}, namun model yang di-deploy adalah ${summary.model_name}.`;
+      }
+
+      async function loadChartAndTable(horizon) {
+        const [histRes, fcRes] = await Promise.all([
+          fetch("/api/historical?window=90"),
+          fetch(`/api/forecast?horizon=${horizon}`),
+        ]);
+        const hist = await histRes.json();
+        const fc = await fcRes.json();
+        currentForecast = fc;
+
+        const labels = [
+          ...hist.map((p) => p.tanggal),
+          ...fc.map((p) => p.tanggal),
+        ];
+        const histData = [
+          ...hist.map((p) => p.nilai),
+          ...Array(fc.length).fill(null),
+        ];
+        const fcData = [
+          ...Array(hist.length - 1).fill(null),
+          hist[hist.length - 1].nilai,
+          ...fc.map((p) => p.nilai),
+        ];
+
+        if (chart) chart.destroy();
+        chart = new Chart(document.getElementById("chart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Historis",
+                data: histData,
+                borderColor: "#58a6ff",
+                pointRadius: 2,
+                tension: 0.2,
+              },
+              {
+                label: "Forecast",
+                data: fcData,
+                borderColor: "#f85149",
+                pointRadius: 2,
+                tension: 0.2,
+                borderDash: [4, 3],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: "#e6edf3" } } },
+            scales: {
+              x: { ticks: { color: "#8b949e", maxTicksLimit: 10 } },
+              y: {
+                ticks: { color: "#8b949e", callback: (v) => idFmt(v) },
+                title: {
+                  display: true,
+                  text: "USD/IDR Exchange Rate (IDR)",
+                  color: "#8b949e",
+                },
+              },
+            },
+          },
+        });
+
+        const tbody = document.querySelector("#forecast-table tbody");
+        tbody.innerHTML = fc
+          .map(
+            (p) =>
+              `<tr><td>${p.tanggal}</td><td>Rp ${idFmt(p.nilai)}</td></tr>`,
+          )
+          .join("");
+      }
+
+      function downloadCSV() {
+        if (currentForecast.length === 0) return;
+
+        let csv = "Tanggal,Forecast (IDR)\n";
+
+        currentForecast.forEach((row) => {
+          csv += `${row.tanggal},${Math.round(row.nilai)}\n`;
+        });
+
+        const blob = new Blob([csv], {
+          type: "text/csv;charset=utf-8;",
+        });
+
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+
+        const horizon = document.getElementById("horizon-select").value;
+
+        a.href = url;
+        a.download = `forecast_${horizon}_hari.csv`;
+
+        document.body.appendChild(a);
+
+        a.click();
+
+        document.body.removeChild(a);
+
+        URL.revokeObjectURL(url);
+      }
+
+      async function init() {
+        const summary = await loadSummary();
+        await loadEvaluation(summary);
+        await loadChartAndTable(
+          document.getElementById("horizon-select").value,
+        );
+      }
+
+      document
+        .getElementById("horizon-select")
+        .addEventListener("change", (e) => loadChartAndTable(e.target.value));
+      document
+        .getElementById("download-btn")
+        .addEventListener("click", downloadCSV);
+
+      init();
+    </script>
+
+    <footer class="footer">
+      <p class="disclaimer">
+        ⚠️ <strong>Disclaimer:</strong> Forecast dibuat berdasarkan pola
+        historis data JISDOR menggunakan model Prophet. Hasil prediksi tidak
+        memperhitungkan faktor eksternal seperti kebijakan moneter, kondisi
+        ekonomi global, maupun peristiwa tak terduga sehingga tidak dapat
+        dijadikan satu-satunya dasar pengambilan keputusan.
+      </p>
+
+      <p class="developer">
+        Developed by
+        <a
+          href="https://github.com/nadiraaini77"
+          target="_blank"
+          rel="noopener noreferrer"
+          >nadiraainii77</a
+        >
+      </p>
+    </footer>
+  </body>
+</html>

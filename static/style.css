@@ -1,0 +1,147 @@
+:root {
+  --gold: #8b0000;
+  --bg: #0e1117;
+  --card: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  font-family:
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 24px;
+}
+h1 {
+  font-size: 1.6rem;
+  margin-bottom: 4px;
+}
+.caption {
+  color: #8b949e;
+  margin-bottom: 20px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.metric {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.metric .label {
+  color: #8b949e;
+  font-size: 0.8rem;
+}
+.metric .value {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+select {
+  background: #21262d;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+th {
+  color: #8b949e;
+  font-weight: 500;
+}
+tr.best {
+  background: rgba(46, 160, 67, 0.15);
+}
+.layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+.sidebar .card p {
+  margin: 6px 0;
+  font-size: 0.9rem;
+}
+.badge {
+  display: inline-block;
+  background: rgba(46, 160, 67, 0.2);
+  color: #3fb950;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+a {
+  color: #58a6ff;
+}
+
+button {
+  background: #238636;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #2ea043;
+}
+
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.disclaimer {
+  color: #8b949e;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  max-width: 900px;
+  margin: 0 auto 18px auto;
+}
+
+.developer {
+  color: #8b949e;
+  font-size: 0.9rem;
+}
+
+.developer a {
+  color: #58a6ff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.developer a:hover {
+  text-decoration: underline;
+}
